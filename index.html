@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Panel PRO Supabase</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+body{
+  margin:0;
+  font-family:Inter,Arial;
+  background:#0b1220;
+  color:#e5e7eb;
+}
+
+.container{
+  max-width:1200px;
+  margin:auto;
+  padding:30px;
+}
+
+.header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+h1{
+  font-size:28px;
+  margin:0;
+}
+
+button{
+  background:#2563eb;
+  border:none;
+  padding:10px 14px;
+  border-radius:10px;
+  color:white;
+  cursor:pointer;
+}
+
+button.danger{background:#dc2626;}
+button.edit{background:#16a34a;}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:15px;
+  margin:20px 0;
+}
+
+.card{
+  background:#111827;
+  padding:15px;
+  border-radius:14px;
+  border:1px solid #1f2937;
+}
+
+.n{
+  font-size:26px;
+  font-weight:bold;
+  margin-top:5px;
+}
+
+.table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:15px;
+}
+
+th,td{
+  padding:12px;
+  border-bottom:1px solid #1f2937;
+  font-size:14px;
+}
+
+th{
+  background:#1f2937;
+  text-align:left;
+}
+
+tr:hover{
+  background:#111827;
+}
+
+.toolbar{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:15px 0;
+}
+
+input,select{
+  padding:10px;
+  border-radius:10px;
+  border:1px solid #334155;
+  background:#0f172a;
+  color:white;
+}
+
+.small{
+  opacity:.6;
+  font-size:12px;
+  margin-top:10px;
+}
+
+/* MODAL */
+.modal{
+  display:none;
+  position:fixed;
+  top:0;left:0;
+  width:100%;height:100%;
+  background:rgba(0,0,0,.6);
+  justify-content:center;
+  align-items:center;
+}
+
+.modal-content{
+  background:#0f172a;
+  padding:20px;
+  border-radius:12px;
+  width:300px;
+}
+
+.modal-content input{
+  width:100%;
+  margin-bottom:10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>🚀 Panel PRO Supabase</h1>
+    <div>
+      <button onclick="exportExcel()">📄 Excel</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">Usuarios<div class="n" id="total">0</div></div>
+    <div class="card">Cursos<div class="n" id="cursos">0</div></div>
+    <div class="card">Hoy<div class="n" id="hoy">0</div></div>
+  </div>
+
+  <div class="toolbar">
+    <input id="search" placeholder="Buscar usuario..."/>
+    <select id="cursoFilter">
+      <option value="">Todos los cursos</option>
+    </select>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th>
+<th>Teléfono</th>
+<th>Progreso</th>
+<th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="table"></tbody>
+  </table>
+
+  <div class="small">⚡ Realtime conectado a Supabase</div>
+
+</div>
+
+<!-- MODAL EDIT -->
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3>Editar usuario</h3>
+    <input id="editNombre" placeholder="Nombre"/>
+    <input id="editEmail" placeholder="Email"/>
+    <input id="editTelefono" placeholder="Teléfono"/>
+    <input id="editCurso" placeholder="Curso"/>
+    <button onclick="saveEdit()">Guardar</button>
+    <button onclick="closeModal()" class="danger">Cerrar</button>
+  </div>
+</div>
+
+<script>
+
+const supabaseUrl = "https://nzecuovatcavltrwufah.supabase.co";
+
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56ZWN1b3ZhdGNhdmx0cnd1ZmFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MDEwMTAsImV4cCI6MjA5MjQ3NzAxMH0.n6nvAuKb4GP-lOGHbeM91ibKt9M9oIxEz9oSCZD24uY";
+
+const supabaseClient = supabase.createClient(
+  supabaseUrl,
+  supabaseKey
+);
+
+let data = [];
+
+/* =========================
+   CARGAR USUARIOS
+========================= */
+
+async function load(){
+
+  const { data: users, error } = await supabaseClient
+    .from("usuarios")
+    .select("*")
+    .order("id",{ascending:false});
+
+  console.log(users);
+  console.log(error);
+
+  data = users || [];
+
+  render(data);
+
+}
+
+/* =========================
+   RENDER
+========================= */
+
+function render(users){
+
+document.getElementById("table").innerHTML = users.map(u => `
+
+<tr>
+
+<td>${u.id}</td>
+
+<td>${u.telefono || ""}</td>
+
+<td>${(u.progreso || []).length} / 13</td>
+
+<td>
+<button class="danger" onclick="deleteUser(${u.id})">
+Eliminar
+</button>
+</td>
+
+</tr>
+
+`).join("");
+
+/* TOTAL USUARIOS */
+
+document.getElementById("total").innerText = users.length;
+
+/* CURSOS */
+
+document.getElementById("cursos").innerText = 1;
+
+/* HOY */
+
+document.getElementById("hoy").innerText = users.length;
+
+}
+
+/* =========================
+   BUSCADOR
+========================= */
+
+document.getElementById("search")
+.addEventListener("input", filter);
+
+function filter(){
+
+const q = document
+.getElementById("search")
+.value
+.toLowerCase();
+
+const filtrados = data.filter(u =>
+
+(u.telefono || "")
+.toLowerCase()
+.includes(q)
+
+);
+
+render(filtrados);
+
+}
+
+/* =========================
+   ELIMINAR
+========================= */
+
+async function deleteUser(id){
+
+if(!confirm("¿Eliminar usuario?")) return;
+
+await supabaseClient
+.from("usuarios")
+.delete()
+.eq("id", id);
+
+load();
+
+}
+
+/* =========================
+   EXPORTAR EXCEL
+========================= */
+
+function exportExcel(){
+
+const ws = XLSX.utils.json_to_sheet(data);
+
+const wb = XLSX.utils.book_new();
+
+XLSX.utils.book_append_sheet(
+wb,
+ws,
+"Usuarios"
+);
+
+XLSX.writeFile(wb, "usuarios.xlsx");
+
+}
+
+/* =========================
+   REALTIME
+========================= */
+
+supabaseClient
+.channel("usuarios")
+.on(
+"postgres_changes",
+{
+event:"*",
+schema:"public",
+table:"usuarios"
+},
+() => load()
+)
+.subscribe();
+
+/* =========================
+   INICIO
+========================= */
+
+load();
+
+</script>
+
+</body>
+</html>
